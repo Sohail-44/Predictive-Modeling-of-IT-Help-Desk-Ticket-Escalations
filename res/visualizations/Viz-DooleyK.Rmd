@@ -1,0 +1,28 @@
+---
+title: "Viz-DooleyK-RMD"
+author: "Dooley Kim"
+date: "2023-11-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(broom)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(rpart.plot)
+library(tidymodels) 
+library(varhandle)
+library(vip)
+library(here)
+
+ggplot(tickets_escalated) +
+  geom_bar(aes(x = priority, fill = seniority)) +
+  facet_wrap(vars(category))
+
+```
+

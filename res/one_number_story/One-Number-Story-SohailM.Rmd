@@ -1,0 +1,30 @@
+---
+title: "One-Number-Story-SohailM"
+author: "Mohammed Sohail Khan"
+date: '`r Sys.Date()`'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# https://docs.google.com/document/d/1Sq2-7n91B3uizeUHAreKzmJ1PPUsmP7oktAV875UBNo/preview#heading=h.ctpd18l06yte
+```
+
+## Research Question
+
+Primary Question: What ticket characteristics are most helpful in predicting whether or not a ticket was escalated? How can we predict which tickets are/are not escalated? In other words, what tickets are most likely to be escalated?
+
+## Narrative
+
+One Number Story Draft : 
+
+Our research aims to determine what factors contribute to whether or not an IT Help Desk ticket is escalated, that is, how can we predict which tickets are/are not escalated? Our preliminary investigation found that submitter seniority and ticket category were strong predictors for a ticket's escalation status. 
+In my One-Number-Story, I am focusing on specifically the 'category' variable. So out of altogether 100k tickets, approximately 36k tickets were escalated, which shows that more than 1/3 of the tickets were escalated. Out of the approximately 36k escalated tickets, approximately 14k  are the category of "systems", which to emphasize is 2/5th  of the escalated tickets, making "systems"  the highest ticket escalator in 'category variable'  followed by SSO/IAM (29%), software (19%) and hardware (10%). This demonstrates the probablity that,out of every 10 tickets escalated, 4 tickets are from the "Systems", approximately 3 tickets are from "SSO/IAM", similarly approximately 2 tickets are from Software and 1 ticket is from hardware. 
+
+
+
+
+
+
+

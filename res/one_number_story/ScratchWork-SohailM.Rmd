@@ -1,0 +1,115 @@
+---
+title: "COMP 112 Final Project"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE, tidy = TRUE)
+```
+
+### Import Dataset & Activate Packages
+```{r Loading packages and data}
+library(broom)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(rpart.plot)
+library(tidymodels) 
+library(varhandle)
+library(vip)
+library(here)
+
+tidymodels_prefer()
+conflicted::conflict_prefer("vi", "vip")
+
+set.seed(123)
+
+tickets_base <- read_csv(here("res/tickets.csv"))
+```
+
+### Clean Data & Mutation
+```{r Data cleaning}
+tickets_mod <- tickets_base %>%
+  select(-ticket, -ITOwner, -requestor) %>%
+  rename(category = FiledAgainst) %>%
+  rename(duration = daysOpen) %>%
+  rename(impact = Severity) %>%
+  rename(priority = Priority) %>%
+  rename(satisfaction = Satisfaction) %>%
+  rename(seniority = RequestorSeniority) %>%
+  rename(type = TicketType) %>%
+  mutate(category = replace(category, category == "Access/Login", "SSO/IAM")) %>%
+  mutate(priority = replace(priority, priority == "0 - Unassigned", "Unclassified")) %>%
+  mutate(priority = replace(priority, priority == "1 - Low", "Low")) %>%
+  mutate(priority = replace(priority, priority == "2 - Medium", "Medium")) %>%
+  mutate(priority = replace(priority, priority == "3 - High", "High")) %>%
+  mutate(impact = replace(impact, impact == "0 - Unclassified", "Unclassified")) %>%
+  mutate(impact = replace(impact, impact == "1 - Minor", "Single Person")) %>%
+  mutate(impact = replace(impact, impact == "2 - Normal", "Group")) %>%
+  mutate(impact = replace(impact, impact == "3 - Major", "Department")) %>%
+  mutate(impact = replace(impact, impact == "4 - Critical", "Multiple Departments")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "0 - Unknown", "N/A")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "1 - Unsatisfied", "Unsatisfied")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "2 - Satisfied", "Satisfied")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "3 - Highly satisfied", "Highly Satisfied")) %>%
+  mutate(seniority = replace(seniority, seniority == "1 - Junior", "Junior")) %>%
+  mutate(seniority = replace(seniority, seniority == "2 - Regular", "Regular")) %>%
+  mutate(seniority = replace(seniority, seniority == "3 - Senior", "Senior")) %>%
+  mutate(seniority = replace(seniority, seniority == "4 - Management", "Management")) %>%
+  mutate(type = replace(type, type == "Issue", "Malfunction")) 
+
+# Implementation credit: Alex McCreight
+tickets_mod2 <- tickets_mod %>% 
+  mutate(wasEscalated = case_when(
+    priority == "High" & impact == "Group" ~ 1,
+    priority == "High" & impact == "Department" ~ 1,
+    priority == "High" & impact == "Multiple Departments" ~ 1,
+    TRUE ~ 0
+  ))
+
+str(tickets_mod2)
+
+tickets <- as.data.frame(unclass(tickets_mod2), stringsAsFactors = TRUE)
+tickets$wasEscalated <- as.factor(tickets$wasEscalated)
+tickets$duration <- as.factor(tickets$duration)
+```
+
+## Research Question
+What tickets are most likely to be escalated?
+
+```{r}
+tickets_escalated <- tickets_mod2 %>%
+  filter(wasEscalated == 1)
+
+tickets_escalated_by_category <- tickets_escalated %>% select(category) %>% table()
+
+# Lots of tickets from management and regular, less for senior, and the least for junior
+# Interns probably won't be submitting a lot of tickets. 
+# There are the most management and regular employees at any company
+# Less senior staff in a company, so less tickets submitted.
+ggplot(tickets_escalated) +
+  geom_bar(aes(x = priority, fill = category)) +
+  facet_wrap(vars(seniority))
+
+# We can see that escalated tickets are priority High.
+# Most escalated tickets are in the Systems category.
+ggplot(tickets_mod2) +
+  geom_bar(aes(x = priority, fill = category)) +
+  facet_wrap(vars(wasEscalated))
+
+# Tickets submitted by junior employees are rarely escalated.
+# Management and regular have the highest count of escalated tickets, however senior tickets are also commonly escalated.
+ggplot(tickets_mod2) +
+  geom_bar(aes(x = priority, fill = seniority)) +
+  facet_wrap(vars(wasEscalated))
+```
+
+### Preliminary Answer
+If a ticket is:
+
+- Submitted by Management, Regular, or Senior
+  - Note that most employees are Regular, so seniority_regular may not be a strong predictor
+- Categorized as Systems or SSO/IAM
+
+Then it is likely that it will be escalated.

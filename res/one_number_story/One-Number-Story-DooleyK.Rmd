@@ -1,0 +1,134 @@
+---
+title: "COMP 112 Final Project"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE, tidy = TRUE)
+```
+
+### Import Dataset & Activate Packages
+```{r Loading packages and data}
+library(broom)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(rpart.plot)
+library(tidymodels) 
+library(varhandle)
+library(vip)
+library(here)
+
+tidymodels_prefer()
+conflicted::conflict_prefer("vi", "vip")
+
+set.seed(123)
+
+tickets_base <- read_csv(here("res/tickets.csv"))
+```
+
+### Clean Data & Mutation
+```{r Data cleaning}
+tickets_mod <- tickets_base %>%
+  select(-ticket, -ITOwner, -requestor) %>%
+  rename(category = FiledAgainst) %>%
+  rename(duration = daysOpen) %>%
+  rename(impact = Severity) %>%
+  rename(priority = Priority) %>%
+  rename(satisfaction = Satisfaction) %>%
+  rename(seniority = RequestorSeniority) %>%
+  rename(type = TicketType) %>%
+  mutate(category = replace(category, category == "Access/Login", "SSO/IAM")) %>%
+  mutate(priority = replace(priority, priority == "0 - Unassigned", "Unclassified")) %>%
+  mutate(priority = replace(priority, priority == "1 - Low", "Low")) %>%
+  mutate(priority = replace(priority, priority == "2 - Medium", "Medium")) %>%
+  mutate(priority = replace(priority, priority == "3 - High", "High")) %>%
+  mutate(impact = replace(impact, impact == "0 - Unclassified", "Unclassified")) %>%
+  mutate(impact = replace(impact, impact == "1 - Minor", "Single Person")) %>%
+  mutate(impact = replace(impact, impact == "2 - Normal", "Group")) %>%
+  mutate(impact = replace(impact, impact == "3 - Major", "Department")) %>%
+  mutate(impact = replace(impact, impact == "4 - Critical", "Multiple Departments")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "0 - Unknown", "N/A")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "1 - Unsatisfied", "Unsatisfied")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "2 - Satisfied", "Satisfied")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "3 - Highly satisfied", "Highly Satisfied")) %>%
+  mutate(seniority = replace(seniority, seniority == "1 - Junior", "Junior")) %>%
+  mutate(seniority = replace(seniority, seniority == "2 - Regular", "Regular")) %>%
+  mutate(seniority = replace(seniority, seniority == "3 - Senior", "Senior")) %>%
+  mutate(seniority = replace(seniority, seniority == "4 - Management", "Management")) %>%
+  mutate(type = replace(type, type == "Issue", "Malfunction")) 
+
+# Implementation credit: Alex McCreight
+tickets_mod2 <- tickets_mod %>% 
+  mutate(wasEscalated = case_when(
+    priority == "High" & impact == "Group" ~ 1,
+    priority == "High" & impact == "Department" ~ 1,
+    priority == "High" & impact == "Multiple Departments" ~ 1,
+    TRUE ~ 0
+  ))
+
+str(tickets_mod2)
+
+tickets <- as.data.frame(unclass(tickets_mod2), stringsAsFactors = TRUE)
+tickets$wasEscalated <- as.factor(tickets$wasEscalated)
+tickets$duration <- as.factor(tickets$duration)
+```
+
+## Research Question
+What tickets are most likely to be escalated?
+
+```{r}
+tickets_escalated <- tickets_mod2 %>%
+  filter(wasEscalated == 1)
+
+# Lots of tickets from management and regular, less for senior, and the least for junior
+# Interns probably won't be submitting a lot of tickets. 
+# There are the most management and regular employees at any company
+# Less senior staff in a company, so less tickets submitted.
+ggplot(tickets_escalated) +
+  geom_bar(aes(x = priority, fill = category)) +
+  facet_wrap(vars(seniority))
+
+# We can see that escalated tickets are priority High.
+# Most escalated tickets are in the Systems category.
+ggplot(tickets_mod2) +
+  geom_bar(aes(x = priority, fill = category)) +
+  facet_wrap(vars(wasEscalated))
+
+# Tickets submitted by junior employees are rarely escalated.
+# Management and regular have the highest count of escalated tickets, however senior tickets are also commonly escalated.
+ggplot(tickets_mod2) +
+  geom_bar(aes(x = priority, fill = seniority)) +
+  facet_wrap(vars(wasEscalated))
+```
+
+### Preliminary Answer
+If a ticket is:
+
+- Submitted by Management, Regular, or Senior
+  - Note that most employees are Regular, so seniority_regular may not be a strong predictor
+- Categorized as Systems or SSO/IAM
+
+Then it is likely that it will be escalated.
+```{r}
+ticket_mod<-tickets_mod2%>%
+filter(wasEscalated==1)
+
+ticket_mod_category<-ticket_mod%>%
+  select(impact)%>%
+  table()
+```
+
+## Research Question
+What variable can best predict which tickets will be escalated? What tickets are most likely to get escalated?
+
+## Title: 
+correlation between elevated tickets and seniority and why.
+
+
+##  Story
+Our group is trying to find out whether is a correlation between different variables and the probability of the ticket being escalated. The different variables that may effect escalation are impact, type, category and seniority. Out of 100,000 tickets, 35,699 of the tickets were escalated. When tickets are escalated, that means that the person who was originally working on it, could not solve a problem. If they couldn't solve the problem, it would then be sent to a higher up office to try to figure out how to fix the issue. Among the categories, 40% of them came from Systems while 30% of the escalations. came from SSO/IAM. For the impact, almost all, 92% of the elevated tickets were impacting the larger group.All of the escalated tickets were high priority. When looking at the types of tickets you see that 75% of tickets were requested while only 25% were malfunctions. 33% of elevated tickets come from management,34% came from regular employees and hardly any came from junior or senior employees. This story specifically focuses on on what level it came from and why it may happen like that. 33% of the tickets came from management and 34% came from regular employees. The other 2 options are junior and senior employees.I think that there is not a lot of senior employees that have their tickets escalated because there probably aren’t that many tickets that come from the senior employees. A lot of what the senior employees do, is telling people what to do and in public relations, most of it is not working with the technology hands on, which is where most of the people are going to raise tickets. The same problem applies with people who are junior employees. Most of the time, the junior employees are not going to be working hands on with the technology.
+
+```
+
