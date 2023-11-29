@@ -27,8 +27,7 @@ set.seed(123)
 tickets_base <- read_csv(here("res/tickets.csv"))
 ```
 
-### Clean Data & Mutation
-```{r Data cleaning}
+```{r Data cleaning, include = FALSE}
 tickets_mod <- tickets_base %>%
   select(-ticket, -ITOwner, -requestor) %>%
   rename(category = FiledAgainst) %>%
@@ -73,3 +72,14 @@ tickets <- as.data.frame(unclass(tickets_mod2), stringsAsFactors = TRUE)
 tickets$wasEscalated <- as.factor(tickets$wasEscalated)
 tickets$duration <- as.factor(tickets$duration)
 ```
+
+```{r, echo = FALSE}
+tickets_friendly <- tickets_mod2 %>%
+  mutate(wasEscalated = recode(wasEscalated, "0" = "Not Escalated", "1" = "Escalated"))
+
+ggplot(tickets_friendly) +
+  geom_bar(aes(x = seniority, fill = category)) +
+  facet_wrap(vars(wasEscalated)) + 
+  labs(title = "Tickets by Escalation, Seniority, and Category", x = "Seniority", y = "Count", fill = "Category")
+```
+
