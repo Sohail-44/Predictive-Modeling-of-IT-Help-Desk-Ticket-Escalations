@@ -21,8 +21,11 @@ library(vip)
 library(here)
 
 ggplot(tickets_escalated) +
-  geom_bar(aes(x = priority, fill = seniority)) +
-  facet_wrap(vars(category))
+  geom_bar(aes(x = category, fill = seniority)) +
+  facet_wrap(vars(wasEscalated))+
+  labs( title="Correlation between category of ticket and  seniority of those filing it",
+           subtitle="created by Dooley Kim",
+           caption="This graph was created by Dooley Kim on 12-1-23. We could not find the source of this dataset unfortunately.")
 
 ```
 
