@@ -79,6 +79,20 @@ tickets$duration <- as.factor(tickets$duration)
 What tickets are most likely to be escalated?
 
 ```{r}
+tickets_escalatedOnly <- tickets %>%
+  filter(wasEscalated == 1)
+
+tickets_notEscalated <- tickets %>%
+  filter(wasEscalated == 0)
+
+summary(tickets_escalatedOnly)
+summary(tickets_notEscalated)
+
+# See trends in seniority, category, and priority. 
+```
+
+
+```{r}
 tickets_escalated <- tickets_mod2 %>%
   filter(wasEscalated == 1)
 
