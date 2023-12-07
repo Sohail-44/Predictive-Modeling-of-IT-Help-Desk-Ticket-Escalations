@@ -1,7 +1,8 @@
 ---
-title: "COMP 112 Final Project"
+title: "SohailM-RMD"
+author: "Mohammed Sohail Khan"
+date: "2023-11-28"
 output: html_document
-date: "`r Sys.Date()`"
 ---
 
 ```{r setup, include=FALSE}
@@ -79,44 +80,14 @@ tickets$duration <- as.factor(tickets$duration)
 What tickets are most likely to be escalated?
 
 ```{r}
-tickets_escalated <- tickets_mod2 %>%
-  filter(wasEscalated == 1)
 
-# Lots of tickets from management and regular, less for senior, and the least for junior
-# Interns probably won't be submitting a lot of tickets. 
-# There are the most management and regular employees at any company
-# Less senior staff in a company, so less tickets submitted.
-ggplot(tickets_escalated) +
-  geom_bar(aes(x = priority, fill = category)) +
-  facet_wrap(vars(seniority))
-
-# We can see that escalated tickets are priority High.
-# Most escalated tickets are in the Systems category.
-ggplot(tickets_mod2) +
-  geom_bar(aes(x = priority, fill = category)) +
-  facet_wrap(vars(wasEscalated))
 
 # Tickets submitted by junior employees are rarely escalated.
 # Management and regular have the highest count of escalated tickets, however senior tickets are also commonly escalated.
 ggplot(tickets_mod2) +
   geom_bar(aes(x = priority, fill = seniority)) +
-  facet_wrap(vars(wasEscalated))
+  facet_wrap(vars(wasEscalated)) + labs(x= "Priority", y= "Ticket Count" )+theme_classic()
 
 
 ```
-Primary Question: What ticket characteristics are most helpful in predicting whether or not a ticket was escalated? How can we predict which tickets are/are not escalated? In other words, what tickets are most likely to be escalated?
-
-- Seniority and Category are strong predictors as we have found out in our few initial visualizations. 
-
-# Effective Visualization
-
-```{r}
-ggplot(tickets_mod2) +
-  geom_bar(aes(x = priority, fill = seniority)) +
-  facet_wrap(vars(wasEscalated))+theme_classic()+ labs(x= "Priority", y="Ticket count")+
-
-
-```
-
-
-
+This visualization was created by Mohammed Sohail Khan, which analyzes how in Seniority tickets submitted by Management and Regular was escalated and additionally the graph shows how only the high priority tickets was escalated. 
