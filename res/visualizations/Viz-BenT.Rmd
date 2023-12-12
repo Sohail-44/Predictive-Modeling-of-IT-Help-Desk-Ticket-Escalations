@@ -12,6 +12,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(broom)
 library(dplyr)
 library(ggplot2)
+library(forcats)
 library(readr)
 library(rpart.plot)
 library(tidymodels) 
@@ -75,11 +76,62 @@ tickets$duration <- as.factor(tickets$duration)
 
 ```{r, echo = FALSE}
 tickets_friendly <- tickets_mod2 %>%
-  mutate(wasEscalated = recode(wasEscalated, "0" = "Not Escalated", "1" = "Escalated"))
+  mutate(wasEscalated = recode(wasEscalated, "0" = "Not Escalated", "1" = "Escalated")) %>%
+  mutate(impact = recode(impact, "Multiple Departments" = "Multiple Depts."))
+
+tickets_friendly <- tickets_friendly %>%
+  group_by(seniority) %>%
+  mutate(senCount = n())
+
+pdf("final_sen_viz.pdf",
+    width = 10,
+    height = 10)
 
 ggplot(tickets_friendly) +
   geom_bar(aes(x = seniority, fill = category)) +
   facet_wrap(vars(wasEscalated)) + 
-  labs(title = "Tickets by Escalation, Seniority, and Category", x = "Seniority", y = "Count", fill = "Category")
+  labs(title = "Tickets by Escalation, Seniority, and Category", x = "Seniority", y = "Ticket Count", fill = "Category")
+
+dev.off()
+
+pdf("final_prio_viz.pdf",
+    width = 10,
+    height = 10)
+
+ggplot(tickets_friendly) +
+  geom_bar(aes(x = priority, fill = category)) +
+  facet_wrap(vars(wasEscalated)) +
+  labs(title = "Tickets by Escalation, Priority, and Category", x = "Priority", y = "Ticket Count", fill = "Category")
+
+dev.off()
+
+pdf("final_impact_viz.pdf",
+    width = 10,
+    height = 10)
+
+ggplot(tickets_friendly) +
+  geom_bar(aes(x = impact, fill = category)) +
+  facet_wrap(vars(wasEscalated)) +
+  scale_x_discrete(guide = guide_axis(n.dodge = 2)) + 
+  labs(title = "Tickets by Escalation, Impact, and Category", x = "Priority", y = "Ticket Count", fill = "Category")
+
+dev.off()
+
+# Dooley
+# Primary: Category vs ticket count
+# Like that the bars are arranged in ascending order
+ggplot(tickets_friendly) +
+  geom_bar(aes(x = category, fill = seniority)) +
+  facet_wrap(vars(wasEscalated))+
+  labs( title="Correlation between category of ticket and  seniority of those filing it",
+           subtitle="created by Dooley Kim",
+           caption="This graph was created by Dooley Kim on 12-1-23. We could not find the source of this dataset unfortunately.")
+
+# Sohail
+# Primary: Priority vs ticket count
+# Like the y-axis label
+ggplot(tickets_mod2) +
+  geom_bar(aes(x = priority, fill = seniority)) +
+  facet_wrap(vars(wasEscalated)) + labs(x= "Priority", y= "Ticket Count" )+theme_classic()
 ```
 
