@@ -1,0 +1,445 @@
+---
+title: "COMP 112 Final Project: Statistical Models"
+author: "Ben Tang"
+date: "`r Sys.Date()`"
+html_document: default
+pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval = TRUE, warning = FALSE, message = FALSE, tidy = TRUE)
+```
+
+## R Implementation
+### Import Dataset & Activate Packages
+```{r Loading packages and data}
+library(broom)
+library(dplyr)
+library(ggplot2)
+library(readr)
+library(rpart.plot)
+library(tidymodels) 
+library(varhandle)
+library(vip)
+library(here)
+
+tidymodels_prefer()
+conflicted::conflict_prefer("vi", "vip")
+
+set.seed(123)
+
+tickets_base <- read_csv(here("res/tickets.csv"))
+```
+
+### Clean Data & Mutation
+```{r Data cleaning}
+tickets_mod <- tickets_base %>%
+  select(-ticket, -ITOwner, -requestor) %>%
+  rename(category = FiledAgainst) %>%
+  rename(duration = daysOpen) %>%
+  rename(impact = Severity) %>%
+  rename(priority = Priority) %>%
+  rename(satisfaction = Satisfaction) %>%
+  rename(seniority = RequestorSeniority) %>%
+  rename(type = TicketType) %>%
+  mutate(category = replace(category, category == "Access/Login", "SSO/IAM")) %>%
+  mutate(priority = replace(priority, priority == "0 - Unassigned", "Unclassified")) %>%
+  mutate(priority = replace(priority, priority == "1 - Low", "Low")) %>%
+  mutate(priority = replace(priority, priority == "2 - Medium", "Medium")) %>%
+  mutate(priority = replace(priority, priority == "3 - High", "High")) %>%
+  mutate(impact = replace(impact, impact == "0 - Unclassified", "Unclassified")) %>%
+  mutate(impact = replace(impact, impact == "1 - Minor", "Single Person")) %>%
+  mutate(impact = replace(impact, impact == "2 - Normal", "Group")) %>%
+  mutate(impact = replace(impact, impact == "3 - Major", "Department")) %>%
+  mutate(impact = replace(impact, impact == "4 - Critical", "Multiple Departments")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "0 - Unknown", "N/A")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "1 - Unsatisfied", "Unsatisfied")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "2 - Satisfied", "Satisfied")) %>%
+  mutate(satisfaction = replace(satisfaction, satisfaction == "3 - Highly satisfied", "Highly Satisfied")) %>%
+  mutate(seniority = replace(seniority, seniority == "1 - Junior", "Junior")) %>%
+  mutate(seniority = replace(seniority, seniority == "2 - Regular", "Regular")) %>%
+  mutate(seniority = replace(seniority, seniority == "3 - Senior", "Senior")) %>%
+  mutate(seniority = replace(seniority, seniority == "4 - Management", "Management")) %>%
+  mutate(type = replace(type, type == "Issue", "Malfunction")) 
+
+# Implementation credit: Alex McCreight
+tickets_mod2 <- tickets_mod %>% 
+  mutate(wasEscalated = case_when(
+    priority == "High" & impact == "Group" ~ 1,
+    priority == "High" & impact == "Department" ~ 1,
+    priority == "High" & impact == "Multiple Departments" ~ 1,
+    TRUE ~ 0
+  ))
+
+str(tickets_mod2)
+
+tickets <- as.data.frame(unclass(tickets_mod2), stringsAsFactors = TRUE)
+tickets$wasEscalated <- as.factor(tickets$wasEscalated)
+tickets$duration <- as.factor(tickets$duration)
+```
+
+## Regression Models
+### Initial Fit
+```{r Tickets model 1 initial fit}
+tickets_mod1_lasso_spec <-
+  linear_reg() %>%
+  set_args(mixture = 1, penalty = 0) %>% 
+  set_engine(engine = 'glmnet') %>%
+  set_mode('regression')
+
+tickets_mod1_lasso_recipe <- recipe(duration ~ ., data = tickets_mod2) %>%
+    step_nzv(all_predictors()) %>%
+    step_novel(all_nominal_predictors()) %>%
+    step_normalize(all_numeric_predictors()) %>%
+    step_dummy(all_nominal_predictors())
+
+tickets_mod1_lasso_wf <- workflow() %>%
+  add_recipe(tickets_mod1_lasso_recipe) %>%
+  add_model(tickets_mod1_lasso_spec)
+
+tickets_mod1_lasso_fit <- tickets_mod1_lasso_wf %>%
+  fit(data = tickets_mod2)
+```
+
+### Cross-Validation and Final Fit
+```{r Tickets model 1 cross-validation and final fit}
+tickets_cv10_reg <- vfold_cv(tickets_mod2, v = 10)
+
+tickets_mod1_lasso_spec_tune <-
+  linear_reg() %>%
+  set_args(mixture = 1, penalty = tune()) %>%
+  set_engine(engine = 'glmnet') %>%
+  set_mode('regression')
+
+tickets_mod1_lasso_wf_tune <- workflow() %>%
+  add_recipe(tickets_mod1_lasso_recipe) %>%
+  add_model(tickets_mod1_lasso_spec_tune)
+
+tickets_mod1_cv_penalty_grid <- grid_regular(
+  penalty(range = c(-5, 3)),
+  levels = 30)
+
+tickets_mod1_tune_recipe <- tune_grid(
+  tickets_mod1_lasso_wf_tune,
+  resamples = tickets_cv10_reg,
+  metrics = metric_set(mae),
+  grid = tickets_mod1_cv_penalty_grid
+)
+
+tickets_mod1_tune_recipe %>% collect_metrics()
+
+tickets_mod1_final_mod <- select_best(tickets_mod1_tune_recipe, metric = 'mae')
+
+tickets_mod1_final_wf <- finalize_workflow(tickets_mod1_lasso_wf_tune, tickets_mod1_final_mod)
+
+tickets_mod1_final_fit <- fit(tickets_mod1_final_wf, data = tickets_mod2)
+
+tidy(tickets_mod1_final_fit)
+```
+
+### Residual Graphs
+```{r Tickets residual graph}
+tickets_mod1_final_output <- tickets_mod1_final_fit %>% 
+    predict(new_data = tickets_mod2) %>%
+    bind_cols(tickets_mod2) %>%
+    mutate(resid = duration - .pred)
+
+pdf("resid_graph.pdf",
+    width = 5,
+    height = 5)
+
+ggplot(tickets_mod1_final_output, aes(x = .pred, y = resid)) +
+    ggtitle("Residuals v. Predicted Values") +
+    geom_point() +
+    geom_smooth() +
+    geom_hline(yintercept = 0, color = "red") +
+    theme_classic() +
+    labs(x = "Predicted Values", y = "Residuals")
+
+dev.off()
+```
+
+#### Get Variable Importance
+```{r}
+glmnet_output <- tickets_mod1_final_fit %>% extract_fit_engine()
+    
+bool_predictor_exclude <- glmnet_output$beta==0
+
+var_imp <- sapply(seq_len(nrow(bool_predictor_exclude)), function(row) {
+    this_coeff_path <- bool_predictor_exclude[row,]
+    if(sum(this_coeff_path) == ncol(bool_predictor_exclude)){ return(0)}else{
+    return(ncol(bool_predictor_exclude) - which.min(this_coeff_path) + 1)}
+})
+
+var_imp_data <- tibble(
+    var_name = rownames(bool_predictor_exclude),
+    var_imp = var_imp
+)
+var_imp_data %>% arrange(desc(var_imp))
+```
+
+## Classification Models
+### Model 1: Decision Tree
+#### Pre-Processing
+```{r CT Pre-processing}
+tickets_cv10 <- vfold_cv(tickets, v = 10)
+
+tickets_ct_tune <- decision_tree() %>%
+  set_engine(engine = 'rpart') %>%
+  set_args(cost_complexity = tune(),  
+           min_n = 2, 
+           tree_depth = NULL) %>% 
+  set_mode('classification') 
+
+tickets_rec <- recipe(wasEscalated ~ ., data = tickets) %>%
+  step_rm(priority, impact) %>%
+  step_dummy(all_nominal_predictors())
+
+tickets_wf_tune <- workflow() %>%
+  add_model(tickets_ct_tune) %>%
+  add_recipe(tickets_rec)
+
+cc_grid <- grid_regular(cost_complexity(range = c(-5, 1)), levels = 10)
+```
+
+#### Tuning Model
+```{r CT Tune model, eval = FALSE}
+tune_results <- tune_grid(
+  tickets_wf_tune,
+  resamples = tickets_cv10,
+  grid = cc_grid,
+  metrics = metric_set(accuracy)
+)
+
+save(tune_results, file = "tuneRes.RData")
+```
+
+#### Loading Tuned Model
+```{r CT Load tuned model}
+load("tuneRes.RData")
+```
+
+#### Visualize Best Cost Complexity
+```{r CT Visualize best cost complexity}
+pdf("cc_graph.pdf",
+    width = 5,
+    height = 5)
+
+autoplot(tune_results) + 
+  theme_classic() +
+  geom_vline(xintercept = 0.1, color = "red", linetype = "dashed") +
+  geom_vline(xintercept = 0.00001, color = "blue", linetype = "dashed") +
+  geom_vline(xintercept = 0.00464, color = "purple", linetype = "dashed") +
+  geom_vline(xintercept = 0.0002154435, color = "orange", linetype = "dashed") +
+  labs(y = "Accuracy", title = "Cost Complexity vs. Accuracy")
+
+dev.off()
+```
+
+#### Choose Final Model
+```{r CT Choose final model}
+best_cc <- select_by_one_std_err(tune_results, metric = "accuracy", desc(cost_complexity))
+
+tickets_wf_final <- finalize_workflow(tickets_wf_tune, best_cc)
+```
+
+#### Fit Final Model
+```{r CT Fit final CV model, eval = FALSE}
+tickets_final_fit <- fit(tickets_wf_final, data = tickets)
+
+save(tickets_final_fit, file = "cvFinalFit.RData")
+```
+
+#### Load Final Model and Collect Metrics
+```{r CT Load final CV model}
+load("cvFinalFit.RData")
+
+tune_results %>%
+  collect_metrics %>%
+  filter(cost_complexity == best_cc %>% pull(cost_complexity))
+```
+
+#### Visualize Final Tree & Save to PDF
+```{r Save final decision tree to PDF}
+pdf("decision_tree.pdf",
+    width = 5,
+    height = 5)
+
+tickets_ct <- tickets_final_fit %>% extract_fit_engine() %>% rpart.plot() 
+
+dev.off()
+```
+
+#### Make Test Predictions
+```{r CT Make predictions}
+# Tickets 101 and 102 were escalated. Ticket 100 was not.
+test_ticket_escN1 <- tickets[100, ]
+test_ticket_escY1 <- tickets[101, ]
+test_ticket_escY2 <- tickets[102, ]
+
+# Soft
+predict(tickets_final_fit, new_data = test_ticket_escN1, type = "prob")
+predict(tickets_final_fit, new_data = test_ticket_escY1, type = "prob")
+predict(tickets_final_fit, new_data = test_ticket_escY2, type = "prob")
+
+# Hard
+predict(tickets_final_fit, new_data = test_ticket_escN1, type = "class")
+predict(tickets_final_fit, new_data = test_ticket_escY1, type = "class")
+predict(tickets_final_fit, new_data = test_ticket_escY2, type = "class")
+```
+
+#### Evaluate CT Model
+```{r CT Evaluate model}
+metrics <- metric_set(sens, yardstick::spec, accuracy)
+
+tickets_ct_output <- predict(tickets_final_fit, new_data = tickets) %>% bind_cols(tickets %>% select(wasEscalated))
+
+tickets_ct_metrics <- tickets_ct_output %>%
+  metrics(estimate = .pred_class, truth = wasEscalated)
+
+tickets_final_fit %>%
+  extract_fit_engine() %>%
+  pluck('variable.importance')
+```
+
+### Model 2: Decision Tree & Bagging
+#### Pre-Processing
+```{r BM Pre-processing}
+(tickets_rec %>% prep(tickets) %>% juice() %>% ncol()) - 1
+
+tickets_bag_spec <- rand_forest() %>%
+  set_engine(engine = 'ranger') %>%
+  set_args(mtry = 58,
+           trees = 1000,
+           min_n = 2,
+           probability = FALSE,
+           importance = 'impurity') %>%
+  set_mode('classification')
+
+tickets_bag_wf <- workflow() %>%
+  add_model(tickets_bag_spec) %>%
+  add_recipe(tickets_rec)
+```
+
+#### Fit Model & Save Output
+```{r BM Fit model, eval = FALSE}
+tickets_bag_fit <- tickets_bag_wf %>%
+  fit(data = tickets)
+
+save(tickets_bag_fit, file = "ticketsBag_fit.RData")
+```
+
+#### Load Fitted Model & Get OOB Prediction Error
+```{r BM Load fitted model}
+load("ticketsBag_fit.RData")
+
+# Get OOB prediction error: 31.48%
+# tickets_bag_fit
+```
+
+#### Evaluate Model
+```{r BM Evaluate model}
+tickets_bag_OOB_out <- tibble(
+  .pred_class = tickets_bag_fit %>% extract_fit_engine() %>% pluck('predictions'),
+  wasEscalated = tickets %>% pull(wasEscalated))
+
+tickets_bag_metrics <- metric_set(sens, yardstick::spec, accuracy)
+
+tickets_bag_OOB_out %>%
+  tickets_bag_metrics(truth = wasEscalated, estimate = .pred_class)
+
+# Sens 77.93%
+# Spec 51.49%
+# Accu 68.49%
+```
+
+### Model 3: Bagging & Random Forest
+#### Pre-Processing
+```{r RF Pre-processing}
+tickets_rf_spec <- rand_forest() %>%
+  set_engine(engine = 'ranger') %>% 
+  set_args(mtry = NULL,
+           trees = 1000,
+           min_n = 2,
+           probability = FALSE,
+           importance = 'impurity') %>% 
+  set_mode('classification')
+
+tickets_rf_wf <- workflow() %>%
+  add_model(tickets_rf_spec) %>%
+  add_recipe(tickets_rec)
+```
+
+#### Fit Model & Save Output
+```{r RF Fit model, eval = FALSE}
+tickets_rf_fit <- tickets_rf_wf %>%
+  fit(data = tickets)
+
+save(tickets_rf_fit, file = "ticketsRF_fit.RData")
+```
+
+#### Load Model & Get OOB Prediction Error
+```{r RF Load model}
+load("ticketsRF_fit.RData")
+
+# Get OOB prediction error: 30.95%
+# tickets_rf_fit
+```
+
+#### Evaluate Model Part 1: Metrics
+```{r RF Evaluate model}
+tickets_rf_OOB_out <- tibble(
+  .pred_class = tickets_rf_fit %>% extract_fit_engine() %>% pluck('predictions'),
+  wasEscalated = tickets %>% pull(wasEscalated), 
+  seniority = tickets %>% pull(seniority))
+
+tickets_rf_metrics <- metric_set(sens, yardstick::spec, accuracy)
+
+tickets_rf_OOB_out %>% 
+  tickets_rf_metrics(truth = wasEscalated, estimate = .pred_class)
+
+# Sens: 78.02%
+# Spec: 52.86%
+# Accuracy: 69.04%
+```
+
+#### Evaluate Model Part 2: Confusion Matrix
+```{r RF Evaluate model with confusion matrix}
+tickets_rf_OOB_out %>% conf_mat(truth = wasEscalated, estimate = .pred_class)
+
+tickets_rf_OOB_out %>% filter(wasEscalated == 1, .pred_class == 0) %>% count(seniority)
+
+tickets %>% filter(seniority == "Regular") %>% count(seniority)
+```
+
+#### Evaluate Model Part 3a: (Save) Variable Importance Graphs
+```{r RF Evaluate model with variable importance, eval = FALSE}
+impurityVIP <- tickets_rf_fit %>% extract_fit_engine() %>% vip()
+
+permutationVIP <- tickets_rf_wf %>%
+  update_model(tickets_rf_spec %>% set_args(important = "permutation")) %>%
+  fit(data = tickets) %>% extract_fit_engine() %>% vip()
+
+save(impurityVIP, file = "impurityVIP.RData")
+save(permutationVIP, file = "permutationVIP.RData")
+```
+
+#### Evaluate Model Part 3b: (Load) Variable Importance Graphs
+```{r RF Visualize VIP graphs}
+load("impurityVIP.RData")
+load("permutationVIP.RData")
+
+pdf("impurity_graph.pdf",
+    width = 5,
+    height = 5)
+
+impurityVIP
+
+pdf("permutation_graph.pdf",
+    width = 5,
+    height = 5)
+
+permutationVIP
+
+dev.off()
+```
