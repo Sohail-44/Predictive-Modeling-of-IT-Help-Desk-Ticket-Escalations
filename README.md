@@ -6,10 +6,10 @@ Our research question can broadly be described as "what are the most important f
 
 This repository contains the code, and visualizations, we used in this project.
 
-I've also included additional files (in the "stat_mod") folder that contain code on the models we created, to verify the strength of our findings. We chose this as our "advanced topic". 
+We chose statistical modeling as our advanced topic, but unfortunately did not have time to go into it during the presentation due to a lack of time.
 
-For the visualizations: Go to `res\visualizations\*.pdf`.
+Repository contents:
 
-For the data wrangling and basic code: Go to `src\edu\macalester\comp112\finalproject\finalproject.Rmd`.
-
-For the statistical models: Go to `res\stat_mod\models.rmd`.
+- For the visualizations: Go to `res\visualizations\*.pdf`.
+- For the data wrangling and basic code: Go to `src\edu\macalester\comp112\finalproject\finalproject.Rmd`.
+- For the statistical models: Go to `res\stat_mod\models.rmd`.
