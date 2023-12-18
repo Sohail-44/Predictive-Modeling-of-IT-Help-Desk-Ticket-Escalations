@@ -6,7 +6,7 @@ Our research question can broadly be described as "what are the most important f
 
 This repository contains the code, and visualizations, we used in this project.
 
-We chose statistical modeling as our advanced topic, but unfortunately did not have time to go into it during the presentation due to a lack of time.
+We chose statistical modeling as our advanced topic, but unfortunately was not able to go into it during the presentation due to a lack of time, especially considering we went slightly over the time limit.
 
 Repository contents:
 
