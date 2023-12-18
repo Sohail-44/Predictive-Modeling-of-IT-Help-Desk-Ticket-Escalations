@@ -6,7 +6,7 @@ Our research question can broadly be described as "what are the most important f
 
 This repository contains the code, and visualizations, we used in this project.
 
-I've also included additional files (in the "stat_mod") folder that contain code on the models we created, to verify the strength of our findings. 
+I've also included additional files (in the "stat_mod") folder that contain code on the models we created, to verify the strength of our findings. We chose this as our "advanced topic". 
 
 For the visualizations: Go to `res\visualizations\*.pdf`.
 
