@@ -1,6 +1,6 @@
 ---
 title: "COMP 112 Final Project: Statistical Models"
-author: "Ben Tang"
+author: "Ben Tang, Dooley Kim, Sohail Mohammed"
 date: "`r Sys.Date()`"
 html_document: default
 pdf_document: default
