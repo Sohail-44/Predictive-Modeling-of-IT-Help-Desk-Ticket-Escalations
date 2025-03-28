@@ -1,6 +1,6 @@
 # COMP 112 Final Project 
 
-For our research project, we decided to investigate tickets submitted to an IT help desk of an Italian software company. 
+For our research project, we decided to investigate tickets submitted to an IT help desk of an Italian software company. We utilized R.
 
 Our research question can broadly be described as "what are the most important factors in deciding whether or not a ticket should be escalated?" In other words, what characteristics of a ticket 'mark' it for escalation?
 
